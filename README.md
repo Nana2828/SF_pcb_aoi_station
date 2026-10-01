@@ -2,6 +2,29 @@
 
 브레드보드 PCB의 부품 오장착(누락·위치·오부품·전선 색)을 카메라로 검사하고, 결과를 MES에 기록하는 시스템.
 
+## 한눈에 보기
+
+```mermaid
+flowchart LR
+    A[📷 1. 사진 촬영<br/>작업자가 보드를 올리고 검사 버튼] --> B[🤖 2. AI 검사<br/>부품 종류·위치를 자동으로 확인]
+    B --> C[✅ 3. 결과 확인<br/>작업자 화면에 합격/불량 표시]
+    C --> D[🗂️ 4. 기록·관리<br/>MES 서버 저장 → 관리자 웹에서 조회]
+```
+
+- **작업자**는 HMI(검사 화면)에서 사번으로 로그인하고, 보드를 찍으면 결과(합격/불량)를 바로 확인한다. 불량이면 수리 후 재검사하거나 불량으로 확정한다.
+- **관리자**는 웹 대시보드에서 검사 이력·불량 통계·검사 기준(레시피)·사용자 계정을 관리한다.
+- 자세한 내부 동작은 아래 "시스템 구성도"와 "검사 흐름"에서 다룬다. 처음 본다면 이 두 다이어그램만 읽어도 전체 그림이 잡힌다.
+
+**목차**
+1. [시스템 구성도](#1-시스템-구성도)
+2. [검사 흐름](#2-검사-흐름)
+3. [저장소 구조](#3-저장소-구조)
+4. [모듈별 정보](#4-모듈별-정보)
+5. [DB 주요 테이블](#5-db-주요-테이블-mes-소유)
+6. [사용자 인증과 관리](#6-사용자-인증과-관리)
+7. [작업 규칙](#7-작업-규칙)
+8. [실행 방법](#8-실행-방법)
+
 ## 1. 시스템 구성도
 
 ```mermaid
@@ -74,32 +97,44 @@ sequenceDiagram
 
 **판정 방식 (홀 목록)**
 - 보드 좌표는 A~U(보드 번호 10~30, 21행) × 0~13(레일2 + A~E + F~J + 레일2, 14열). 전원 레일에는 E·K·Q 행이 없다.
-- 레시피 = 부품마다 "덮어야 할 홀 목록". 정답 보드를 추론에 넣어 나온 결과를 사람이 실제 보드와 대조해 확정한다 (NE555-A v3).
+- 레시피 = 부품마다 "덮어야 할 홀 목록". 정답 보드를 추론에 넣어 나온 결과를 사람이 실제 보드와 대조해 확정한다 (예: `NE555-A`, 샘플은 `docs/recipe-ne555.json`).
 - 판정: 홀이 전부 비었으면 누락 → 종류가 다르면 다른 부품/전선 색 → 일부만 덮였으면 위치 → 레시피 밖에 부품이 있으면 추가. 신뢰도 0.5 미만 탐지는 제외.
-- mm 좌표 방식(초기 설계)은 쓰지 않는다. 아래 DB 표의 mm 컬럼은 V4 이후 마이그레이션에서 정리 예정 (현재 마지막 번호는 V3, 번호는 MES 담당이 정함).
+- mm 좌표 방식(초기 설계)은 쓰지 않는다. mm 컬럼은 V4 마이그레이션에서 이미 정리했다 (현재 마지막 번호는 V8, 번호는 MES 담당이 정함).
+
+**레시피 등록 (사진 기반 초안)**
+- 관리자 웹에서 보드 사진을 올리면 MES가 Python `/recipe-draft`로 전달해 부품·홀 초안을 받는다. React는 Python을 직접 호출하지 않는다.
+- 받은 초안은 사람이 검토·수정한 뒤 새 버전으로 저장한다 (`status=DRAFT`, `active=false`).
+- `ADMIN`이 승인하면 `status=ACTIVE`로 바뀌고 해당 제품의 기존 활성 버전은 `status=ARCHIVED`가 된다.
+- 자세한 요청·응답 형식은 [API 계약서](docs/api-contract.md)의 "사진 기반 레시피 초안" 참고.
 
 ## 3. 저장소 구조
 
 ```
 pcb-aoi-station/
 ├── README.md
+├── service-config.properties     MES·웹·Python 서비스 주소·포트 설정
 ├── docs/                         설계 문서
 │   ├── api-contract.md           API 계약서
-│   └── defect-criteria.md        불량 기준서 (한도 견본 포함)
+│   ├── defect-criteria.md        불량 기준서 (한도 견본 포함)
+│   └── recipe-ne555.json         레시피 샘플 (NE555-A)
 ├── station/                      C# · 조장
 │   ├── Inspection.slnx
 │   ├── Inspection.Contracts/     HMI와 스테이션이 공유하는 데이터 모델
 │   ├── Inspection.Hmi/           작업자 화면 (WPF)
-│   └── Inspection.Station/       스테이션 서버 (ASP.NET Core)
+│   ├── Inspection.Station/       스테이션 서버 (ASP.NET Core)
+│   └── Inspection.Tests/         스테이션 단위 테스트
 ├── inference/                    Python · 비전 담당
 │   ├── app/                      FastAPI 추론 서비스
 │   ├── training/                 학습 스크립트
 │   └── requirements.txt
-├── mes/pcb_manage/               Java · 백엔드 담당
-│   ├── src/main/java/...         Spring Boot
-│   ├── src/main/resources/db/    DB 마이그레이션 SQL
-│   └── build.gradle.kts
+├── mes/
+│   ├── pcb_manage/                Java · 백엔드 담당
+│   │   ├── src/main/java/...      Spring Boot
+│   │   ├── src/main/resources/db/ DB 마이그레이션 SQL (V1~V8)
+│   │   └── build.gradle.kts
+│   └── postman/                   API 호출 테스트용 Postman 컬렉션
 └── web/                          React · 관리자 웹
+    └── src/pages/                대시보드·검사·불량·제품·레시피·레시피 초안·스테이션·AI 모델·사용자·감사 로그
 ```
 
 모델 가중치 파일과 촬영 데이터셋은 용량이 커서 Git에 올리지 않는다 (`.gitignore`). 공유 드라이브에 두고 경로만 문서에 적는다.
@@ -117,7 +152,7 @@ pcb-aoi-station/
 
 ## 5. DB 주요 테이블 (MES 소유)
 
-현재 스키마: `mes/pcb_manage/src/main/resources/db/migration`의 V1~V4 기준.
+현재 스키마: `mes/pcb_manage/src/main/resources/db/migration`의 V1~V8 기준.
 
 ```mermaid
 erDiagram
@@ -129,6 +164,10 @@ erDiagram
     INSPECTION ||--o{ PART_RESULT : "부품별 결과"
     INSPECTION ||--o{ CONFIRMATION : "작업자 확인"
     WORKER ||--o{ CONFIRMATION : "확인한 작업자"
+    PRODUCT |o--o{ STATION : "운용 제품"
+    RECIPE |o--o{ STATION : "적용 레시피"
+    AI_MODEL ||--o{ AI_MODEL_CLASS : "지원 클래스"
+    AI_MODEL |o--o{ INSPECTION : "사용 모델"
 
     PRODUCT {
         string product_id PK
@@ -144,6 +183,10 @@ erDiagram
         int version "UNIQUE (product_id, version)"
         string note
         boolean active
+        string status "DRAFT | ACTIVE | ARCHIVED (V8)"
+        string created_by "V8"
+        string approved_by "V8"
+        timestamptz approved_at "V8"
         timestamptz created_at
     }
     RECIPE_PART {
@@ -151,6 +194,39 @@ erDiagram
         string part_id PK
         string expected_class
         jsonb holes
+        decimal confidence "V8, 사진 분석 신뢰도"
+        boolean needs_review "V8"
+        boolean review_confirmed "V8"
+        jsonb review_reasons "V8"
+    }
+    STATION {
+        string station_id PK
+        string name
+        string status "RUNNING | STOP | ERROR | OFFLINE"
+        string product_id FK "NULL 허용"
+        uuid recipe_id FK "NULL 허용"
+        string camera_status
+        string ai_status
+        string mes_status
+        timestamptz last_seen
+        timestamptz created_at
+    }
+    AI_MODEL {
+        string model_id PK
+        string name
+        string version
+        string framework
+        int class_count
+        string input_size
+        decimal map50
+        decimal map95
+        boolean active
+        string note
+        timestamptz created_at
+    }
+    AI_MODEL_CLASS {
+        string model_id PK, FK
+        string class_name PK
     }
     WORKER {
         string worker_id PK
@@ -173,6 +249,7 @@ erDiagram
         int defect_count
         string error_code
         int latency_ms
+        string model_id FK "NULL 허용, V5"
         timestamptz captured_at
         timestamptz created_at
     }
@@ -210,6 +287,9 @@ erDiagram
 - MES는 이미지와 이미지 경로를 전달받거나 저장하지 않는다.
 - V4에서 `inspection.image_path` 컬럼을 제거했다.
 - 레시피는 제품별로 버전을 두고(`RECIPE`), 부품 구성은 버전에 붙는다(`RECIPE_PART`).
+- 관리자 웹의 스테이션 현황판은 `STATION` 테이블로 관리한다. 현재 시연 환경은 실제 스테이션 한 대(`ST-01`)만 운용한다 (V6).
+- AI 모델 이력과 지원 클래스는 `AI_MODEL`·`AI_MODEL_CLASS`에 두고, 검사에 사용한 모델은 `inspection.model_id`로 남긴다 (V5).
+- 레시피는 사진 기반 초안(`status=DRAFT`) → 사람 검토 → 승인(`status=ACTIVE`, 기존 활성 버전은 `ARCHIVED`) 흐름을 가진다. 검토가 필요한 부품은 `recipe_part.needs_review`·`review_reasons`로 표시한다 (V8).
 
 **V4 적용 사항** — 검사 기록 API와 핀홀 레시피를 위해 적용했다. 자세한 내용은 `docs/api-contract.md` 검사 기록 API 3번.
 
@@ -218,6 +298,15 @@ erDiagram
 | `inspection` | `verdict`에 `INVALID` 추가, `error_code`·`station_id` 추가, `worker_id` NULL 허용 (로그인 없이 검사한 경우) |
 | `part_result` | `expected_class` 추가, `expected_holes`·`covered_holes` 추가 |
 | `recipe_part` | `holes` 추가, mm 컬럼(`x_mm`·`y_mm`·`tolerance_mm`) 정리 |
+
+**V5~V8 적용 사항** — 관리자 웹 대시보드(스테이션 현황·AI 모델)와 사진 기반 레시피 초안을 위해 적용했다. 자세한 내용은 `docs/api-contract.md` "사진 기반 레시피 초안".
+
+| 버전 | 변경 사항 |
+|---|---|
+| V5 | `STATION`·`AI_MODEL`·`AI_MODEL_CLASS` 테이블 추가, `inspection.model_id` 추가, 대시보드용 제품·레시피·스테이션·모델·검사 시드 데이터 삽입 |
+| V6 | 시연용 다중 스테이션 시드를 정리하고 실제 스테이션 한 대(`ST-01`)로 통합 |
+| V7 | 이전 표기(`STATION-01`)로 저장된 검사 기록의 `station_id`를 `ST-01`로 통일 |
+| V8 | `recipe`에 `status`·`created_by`·`approved_by`·`approved_at` 추가, `recipe_part`에 `confidence`·`needs_review`·`review_confirmed`·`review_reasons` 추가 (레시피 초안 검토·승인 워크플로우) |
 
 - 홀 목록(레시피 홀, 탐지 홀)은 배열 형태(예: `["E9","H9"]`), JSONB 배열로 저장한다.
 

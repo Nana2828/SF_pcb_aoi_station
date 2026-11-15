@@ -57,13 +57,13 @@ flowchart LR
 
 ### 판단한 것: 최종 모델은 YOLOv8n
 
-비교 실험에서는 YOLO26m의 지표가 더 높았지만, 실제 검사 사진에서 저항 330Ω/470Ω 구분이 흔들려 YOLOv8n을 최종 모델로 선택했습니다. 라벨 없는 소규모 사진 확인에 근거한 판단입니다.
+비교 실험(발표자료)에서는 YOLO26m의 지표가 더 높았지만, 실시간 시연에서는 YOLO26m이 부품을 잘 읽지 못했습니다. 작업 로그의 사진 3장 육안 비교에서도 YOLO26m 등은 저항 330Ω/470Ω을 혼동하거나 전선을 IC로 오인했고, YOLOv8n만 분류 오류가 없어 최종 모델로 썼습니다. 정량 평가 없이 소규모 사진 확인에 근거한 판단입니다.
 
 ### 개발 방식과 한계
 
 - 코드는 Claude(AI)와 함께 작성했습니다(커밋의 `Co-Authored-By` 표기). 문제 특정, 실측 확인, 기준 결정은 직접 했습니다.
 - 브레드보드 회로 1종, 직접 촬영한 81장의 소규모 데이터, 웹캠 기반 PoC입니다.
-- 조명이 바뀔 때 저항 색 구분이 약하고, IC·LED 극성 검사는 구현하지 않았습니다.
+- 조명이 바뀔 때 저항 색 구분이 약하고, IC·LED 극성 검사는 구현하지 않았습니다. 시연용 레시피(`NE555-B` v3)는 조명에 따라 470Ω을 오인해 저항 값 판별을 범위에서 제외했습니다(저항 3개 모두 330Ω으로 등록).
 
 <details>
 <summary>내가 작성한 코드 위치</summary>
@@ -165,14 +165,14 @@ sequenceDiagram
     end
 ```
 
-- 판정 불가·오류일 때도 Space로 재검사한다. FAIL이 기본 3회째 이어지면 불량 확정(F)을 권한다.
+- 판정 불가·오류일 때도 Space로 재검사한다. 같은 보드의 3번째 검사(`Hmi:MaxAttempts` 기본값)에서도 FAIL이면 불량 확정(F)을 권하는 안내가 뜬다.
 - MES에는 `POST /api/inspections/{id}/confirmations`(확인 기록)가 만들어져 있지만, 최종본 기준 HMI·스테이션은 아직 이 API를 호출하지 않는다.
 
 **판정 방식 (홀 목록)**
 - 보드 좌표는 A~U(보드 번호 10~30, 21행) × 0~13(레일2 + A~E + F~J + 레일2, 14열). 전원 레일에는 E·K·Q 행이 없다.
 - 레시피 = 부품마다 "덮어야 할 홀 목록". 정답 보드를 추론에 넣어 나온 결과를 사람이 실제 보드와 대조해 확정한다 (예: `NE555-A`, 샘플은 `docs/recipe-ne555.json`).
 - 판정: 홀이 전부 비었으면 누락 → 종류가 다르면 다른 부품/전선 색 → 일부만 덮였으면 위치 → 레시피 밖에 부품이 있으면 추가. 신뢰도 0.5 미만 탐지는 제외.
-- mm 좌표 방식(초기 설계)은 쓰지 않는다. mm 컬럼은 V4 마이그레이션에서 이미 정리했다 (현재 마지막 번호는 V8, 번호는 MES 담당이 정함).
+- mm 좌표 방식(초기 설계)은 쓰지 않는다. mm 컬럼(`x_mm`·`y_mm`·`tolerance_mm`)과 `check_mode`는 V4에서 NULL 허용으로 바꿔 더 이상 채우지 않는다 (컬럼 자체는 남아 있다) (현재 마지막 번호는 V8, 번호는 MES 담당이 정함).
 
 **레시피 등록 (사진 기반 초안)**
 - 관리자 웹에서 보드 사진을 올리면 MES가 Python으로 전달해 부품·홀 초안을 받도록 MES 쪽 클라이언트(`RecipeDraftClient`, 기본 경로 `/recipe-draft`)가 구현돼 있고, Python 쪽 `POST /recipe-draft`(`inference/app/recipe_draft.py`)는 팀장이 작성했다. `/infer`와 같은 파이프라인을 돌린 뒤 YOLO 박스 하나를 부품 하나로 묶어 부품별 다리 홀 초안을 만든다. React는 Python을 직접 호출하지 않는다.
@@ -188,8 +188,9 @@ pcb-aoi-station/
 ├── service-config.properties     MES·웹·Python 서비스 주소·포트 설정
 ├── docs/                         설계 문서
 │   ├── api-contract.md           API 계약서
-│   └── recipe-ne555.json         레시피 샘플 (NE555-A)
-├── station/                      C# · 조장
+│   ├── recipe-ne555.json         레시피 샘플 (NE555-A)
+│   └── images/                   README용 이미지
+├── station/                      C# · 팀장
 │   ├── Inspection.slnx
 │   ├── Inspection.Contracts/     HMI와 스테이션이 공유하는 데이터 모델
 │   ├── Inspection.Hmi/           작업자 화면 (WPF)
@@ -197,6 +198,8 @@ pcb-aoi-station/
 │   └── Inspection.Tests/         스테이션 단위 테스트
 ├── inference/                    Python · 비전 담당
 │   ├── app/                      FastAPI 추론 서비스
+│   ├── tests/                    /recipe-draft 단위 테스트
+│   ├── WORKLOG.md                작업 로그 (맨 위에 시행착오 요약)
 │   ├── training/                 학습 스크립트
 │   └── requirements.txt
 ├── mes/
@@ -204,7 +207,7 @@ pcb-aoi-station/
 │   │   ├── src/main/java/...      Spring Boot
 │   │   ├── src/main/resources/db/ DB 마이그레이션 SQL (V1~V8)
 │   │   └── build.gradle.kts
-│   └── postman/                   API 호출 테스트용 Postman 컬렉션
+│   └── postman/                   Postman 워크스페이스 전역 변수 설정 (API 컬렉션은 없음)
 └── web/                          React · 관리자 웹
     └── src/pages/                대시보드·검사·불량·제품·레시피·레시피 초안·스테이션·AI 모델·사용자·감사 로그
 ```
@@ -285,6 +288,10 @@ erDiagram
         uuid recipe_id PK, FK
         string part_id PK
         string expected_class
+        decimal x_mm "V1, NULL 허용(V4), 미사용"
+        decimal y_mm "V1, NULL 허용(V4), 미사용"
+        decimal tolerance_mm "V1, NULL 허용(V4), 미사용"
+        string check_mode "V1, NULL 허용(V4), 미사용"
         jsonb holes
         decimal confidence "V8, 사진 분석 신뢰도"
         boolean needs_review "V8"
@@ -351,6 +358,8 @@ erDiagram
         string part_id
         string expected_class
         string detected_class
+        decimal confidence "V1, 미사용"
+        decimal offset_mm "V1, 미사용"
         string defect_type
         jsonb expected_holes
         jsonb covered_holes
@@ -390,8 +399,9 @@ erDiagram
 | 테이블 | 변경 사항 |
 |---|---|
 | `inspection` | `verdict`에 `INVALID` 추가, `error_code`·`station_id` 추가, `worker_id` NULL 허용 (로그인 없이 검사한 경우) |
-| `part_result` | `expected_class` 추가, `expected_holes`·`covered_holes` 추가 |
-| `recipe_part` | `holes` 추가, mm 컬럼(`x_mm`·`y_mm`·`tolerance_mm`) 정리 |
+| `part_result` | `expected_class` 추가, `expected_holes`·`covered_holes` 추가 (`confidence`·`offset_mm`는 V1 컬럼 그대로 남아 있음) |
+| `recipe_part` | `holes` 추가, mm 컬럼(`x_mm`·`y_mm`·`tolerance_mm`)과 `check_mode`를 NULL 허용으로 변경 (삭제 아님) |
+| `recipe` | `note` 추가 |
 
 **V5~V8 적용 사항** — 관리자 웹 대시보드(스테이션 현황·AI 모델)와 사진 기반 레시피 초안을 위해 적용했다. 자세한 내용은 `docs/api-contract.md` "사진 기반 레시피 초안".
 
@@ -442,7 +452,7 @@ erDiagram
 psql -U postgres -c "CREATE DATABASE pcb_aoi;"
 ```
 
-2. 첫 번째 PowerShell에서 MES를 실행한다. `1234` 부분에는 본인 PostgreSQL 비밀번호를 입력한다.
+2. 첫 번째 PowerShell에서 MES를 실행한다. `<DB 비밀번호>` 부분에는 본인 PostgreSQL 비밀번호를 입력한다 (`DB_PASSWORD`를 설정하지 않으면 기본값 `postgres`로 접속을 시도한다).
 
 ```powershell
 cd mes\pcb_manage
@@ -522,7 +532,7 @@ uvicorn main:app --port 8001
 cd station\Inspection.Station
 dotnet run
 ```
-- MES 전송은 `appsettings.json`의 `Mes:Enabled`, 주소는 `Mes:BaseUrl`.
+- MES 전송은 `appsettings.json`의 `Mes:Enabled`(기본값 `false`)를 `true`로 바꿔야 켜지고, 주소는 `Mes:BaseUrl`.
 
 **HMI**
 ```powershell

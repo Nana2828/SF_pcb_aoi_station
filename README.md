@@ -21,13 +21,13 @@ flowchart LR
 
 | 이름 | 맡은 부분 |
 |---|---|
-| 서지우 (팀장) | 검사 스테이션 서버, 작업자 HMI |
-| 이하연 | RTMDet 모델, MES, 작업자 인증, 관리자 웹 |
-| 윤수현 | 학습 데이터 수집, 고전적 영상처리 모델, 발표 자료 |
-| 한상원 | 학습 데이터 수집·전처리·라벨링, YOLO 학습, 최적 모델 선정 |
+| 팀장 | 검사 스테이션 서버, 작업자 HMI |
+| 팀원 A | RTMDet 모델, MES, 작업자 인증, 관리자 웹 |
+| 팀원 B | 학습 데이터 수집, 고전적 영상처리 모델, 발표 자료 |
+| 팀원 C | 학습 데이터 수집·전처리·라벨링, YOLO 학습, 최적 모델 선정 |
 | **최나연 (이 저장소 소유자)** | **추론 서비스(`inference/`): 전처리, 핀홀 좌표 검출, 부품-핀홀 매칭, `/infer` API** |
 
-(출처: 2026.09.29 발표자료 역할표)
+(출처: 2026.09.29 발표자료 역할표. 팀원은 익명으로 표기했습니다.)
 
 ### 내가 맡은 `inference/`
 
@@ -173,12 +173,12 @@ pcb-aoi-station/
 
 | 모듈 | 폴더 | 기술 | 포트 | 담당 |
 |---|---|---|---|---|
-| 작업자 HMI | `station/Inspection.Hmi` | C# WPF (.NET 10) | — | 서지우 |
-| 스테이션 서버 | `station/Inspection.Station` | C# ASP.NET Core (.NET 10) | 5215 | 서지우 |
+| 작업자 HMI | `station/Inspection.Hmi` | C# WPF (.NET 10) | — | 팀장 |
+| 스테이션 서버 | `station/Inspection.Station` | C# ASP.NET Core (.NET 10) | 5215 | 팀장 |
 | 추론 서비스 | `inference` | Python, FastAPI, YOLO | 8001 | 최나연 |
-| MES 서버 | `mes` | Java, Spring Boot | 8080 | 이하연 |
+| MES 서버 | `mes` | Java, Spring Boot | 8080 | 팀원 A |
 | DB | — | PostgreSQL | 5432 | |
-| 관리자 웹 | `web` | React | 5173 | 이하연 |
+| 관리자 웹 | `web` | React | 5173 | 팀원 A |
 
 ## 5. DB 주요 테이블 (MES 소유)
 

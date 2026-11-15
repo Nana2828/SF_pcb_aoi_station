@@ -97,31 +97,32 @@ flowchart LR
 ## 2. 검사 흐름
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "20px"}, "sequence": {"actorFontSize": 20, "messageFontSize": 18, "noteFontSize": 18, "actorMargin": 30, "messageMargin": 36, "boxMargin": 8}}}%%
 sequenceDiagram
     actor 작업자
-    participant HMI as HMI (WPF)
-    participant ST as 스테이션 (C#)
-    participant INF as 추론 (Python)
-    participant MES as MES (Java)
+    participant HMI as HMI<br/>(WPF)
+    participant ST as 스테이션<br/>(C#)
+    participant INF as 추론<br/>(Python)
+    participant MES as MES<br/>(Java)
 
     작업자->>HMI: 사번 + PIN 로그인
     HMI->>ST: 로그인 요청
     ST->>MES: POST /api/auth/login
     작업자->>HMI: Space (검사)
-    HMI->>HMI: 카메라 최신 프레임 1장 캡처
-    HMI->>ST: POST /api/trigger (사진, 제품, 작업자)
-    ST->>INF: POST /infer (원본 사진)
-    INF->>INF: 방향 판단 · 레일/라벨로 크롭 · 홀 위치 계산 · YOLO · 홀-박스 대조
-    INF-->>ST: 홀별 부품 목록 (pinhole, class, confidence)
-    ST->>ST: 레시피(홀 목록)와 비교해 판정 (누락·다른 부품·전선 색·위치·추가)
+    HMI->>HMI: 카메라 최신<br/>프레임 1장 캡처
+    HMI->>ST: POST /api/trigger<br/>(사진, 제품, 작업자)
+    ST->>INF: POST /infer<br/>(원본 사진)
+    INF->>INF: 방향 판단 · 레일/라벨로 크롭<br/>홀 위치 계산 · YOLO<br/>홀-박스 대조
+    INF-->>ST: 홀별 부품 목록<br/>(pinhole, class, confidence)
+    ST->>ST: 레시피(홀 목록)와 비교해 판정<br/>(누락·다른 부품·전선 색·위치·추가)
     ST-->>HMI: 판정 결과
     ST->>ST: 보관함에 기록 저장
-    ST->>MES: POST /api/inspections (실패 시 보관함에 남기고 재전송)
+    ST->>MES: POST /api/inspections<br/>(실패 시 보관함에 남기고 재전송)
     alt FAIL
-        작업자->>HMI: 번호대로 수리 → Space (재검사, 같은 보드 #0007-2)
+        작업자->>HMI: 번호대로 수리 → Space<br/>(재검사, 같은 보드 #0007-2)
         작업자->>HMI: 또는 F (불량 확정)
         HMI->>ST: 확인 기록
-        ST->>MES: POST /api/inspections/{id}/confirmations
+        ST->>MES: POST /api/inspections/{id}<br/>/confirmations
     end
 ```
 
@@ -184,7 +185,27 @@ pcb-aoi-station/
 
 현재 스키마: `mes/pcb_manage/src/main/resources/db/migration`의 V1~V8 기준.
 
+### 테이블 관계 요약
+
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "22px"}, "er": {"fontSize": 20, "minEntityWidth": 170, "minEntityHeight": 60}}}%%
+erDiagram
+    PRODUCT ||--o{ RECIPE : "레시피 버전"
+    RECIPE ||--o{ RECIPE_PART : "부품 구성"
+    PRODUCT ||--o{ INSPECTION : "검사 대상"
+    RECIPE |o--o{ INSPECTION : "적용 레시피"
+    WORKER ||--o{ INSPECTION : "검사 수행"
+    INSPECTION ||--o{ PART_RESULT : "부품별 결과"
+    INSPECTION ||--o{ CONFIRMATION : "작업자 확인"
+    WORKER ||--o{ CONFIRMATION : "확인한 작업자"
+    AI_MODEL |o--o{ INSPECTION : "사용 모델"
+```
+
+<details>
+<summary>전체 컬럼이 있는 ER 다이어그램 보기</summary>
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "20px"}, "er": {"fontSize": 18, "minEntityWidth": 160, "entityPadding": 18}}}%%
 erDiagram
     PRODUCT ||--o{ RECIPE : "레시피 버전"
     RECIPE ||--o{ RECIPE_PART : "부품 구성"
@@ -311,6 +332,8 @@ erDiagram
         timestamptz occurred_at
     }
 ```
+
+</details>
 
 - `inspection_id`는 스테이션이 생성한다. 같은 ID가 재전송되면 MES는 중복 저장하지 않는다 (409). 요청 형식은 `docs/api-contract.md`의 "검사 기록 API".
 - 확인 기록은 덮어쓰지 않고 추가만 한다 (감사 추적).

@@ -213,10 +213,10 @@ main
 
 ---
 
-## 스테이션 → MES: 검사 기록 API (MVP-25) — 구현, 2026-09-28
+## 스테이션 → MES: 검사 기록 API (MVP-25) — 구현 완료, 2026-09-28 작성
 
-작성 서지우(스테이션) · 검토 이하연(MES). 기준: main의 MES 스키마(마이그레이션 V1~V3)와 인증 API.
-스테이션 쪽 구현 예정: 검사 완료 후 전송하고, 실패 시 로컬 보관 후 재전송.
+작성 스테이션 담당 · 검토 MES 담당. 작성 당시 기준은 main의 MES 스키마(마이그레이션 V1~V3)와 인증 API이고, 현재 스키마는 V8까지 있다.
+스테이션 쪽 구현 완료: 검사 완료 후 전송하고, 실패 시 보관함(`mes-outbox`)에 보관했다가 재전송한다.
 
 ### 요약
 
@@ -238,7 +238,7 @@ X-Station-Key: <스테이션 키>
 - 작업자 토큰은 1시간이면 만료된다. MES가 끊긴 동안 쌓인 기록을 몇 시간 뒤 보내면 401로 거절된다.
 - 그래서 이 API만 **스테이션 키 헤더(`X-Station-Key`)** 로 확인한다. 키는 양쪽 설정 파일에 같은 값을 넣는다.
 - 작업자는 본문의 `workerId`(HMI 로그인 사번)로 기록한다.
-- 구현 제안: JWT 필터에서 아래 표의 **POST 두 개만** 예외로 두고, 헤더 값이 설정값(`STATION_KEY`)과 같은지 확인. 다르면 401.
+- 구현 완료: JWT 필터에서 아래 표의 **POST 두 개만** 예외로 두고(`StationKeyFilter`), 헤더 값이 설정값(`STATION_KEY`)과 같은지 확인한다. 다르면 401. 스테이션 쪽 설정은 `Mes:StationKey`다.
 
 **인증 범위** (검사 기록 API)
 
@@ -254,7 +254,7 @@ X-Station-Key: <스테이션 키>
 {
   "inspectionId": "3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90",
   "recipeId": null,
-  "stationId": "STATION-01",
+  "stationId": "ST-01",
   "productId": "NE555-B",
   "workerId": "A-1042",
   "verdict": "FAIL",
@@ -287,7 +287,7 @@ X-Station-Key: <스테이션 키>
 |---|---|---|---|
 | inspectionId | UUID | O | 스테이션이 만든 ID. **중복 판단 기준** |
 | recipeId | UUID \| null | - | 스테이션이 UUID를 알면 전달. null이면 MES가 productId의 최신 활성 레시피를 찾아 저장 |
-| stationId | string | O | 스테이션 이름 (`STATION-01`) |
+| stationId | string | O | 스테이션 이름 (`ST-01`) |
 | productId | string | O | `product` 테이블에 있어야 함 (`NE555-B`) |
 | workerId | string \| null | - | HMI 로그인 사번. **NULL 허용**: 로그인 없이 검사한 경우 null (`inspection.worker_id`도 NULL 허용) |
 | verdict | string | O | `PASS` \| `FAIL` \| `INVALID` (판정 불가) |
@@ -365,19 +365,18 @@ X-Station-Key: <스테이션 키>
 
 응답은 검사 기록과 같다 (201 / 409 / 400·422 / 5xx). `{inspectionId}`가 아직 MES에 없으면(검사 기록이 보관함에서 대기 중) `404` → 스테이션은 잠시 뒤 재시도한다. 스테이션은 검사 기록을 먼저, 확인 기록을 나중에 보내므로 순서가 맞으면 404는 거의 생기지 않는다.
 
-> 구현 상태: 스테이션·HMI 쪽 전송은 아직 없음. 이 문서의 요청 형식에 맞춰 스테이션 담당자가 구현한다.
+> 구현 상태: MES의 `POST /api/inspections/{id}/confirmations`는 구현 완료. 스테이션·HMI 쪽 전송은 아직 없음(미구현). HMI의 불량 확정(F)은 화면만 대기로 돌리고 MES로 보내지 않는다.
 
-### 6. 합의할 것 (월요일 아침)
+### 6. 합의 사항 (2026-09-28 회의)
 
-- [x] `workerId` null 처리 → **NULL 허용** (로그인 없이 검사한 경우)
-- [x] 홀 목록 저장 형식 → 배열 형태(예: `["E9","H9"]`), JSONB 배열로 저장 (MES 담당 제안)
-- [ ] 스테이션 키 값과 설정 이름
-- [ ] 시연 작업자 사번·PIN
-- [ ] MES를 띄울 노트북(LG)과 주소
+- [x] `workerId` null 처리 → **NULL 허용** (로그인 없이 검사한 경우) — 실행 완료 (V4)
+- [x] 홀 목록 저장 형식 → 배열 형태(예: `["E9","H9"]`), JSONB 배열로 저장 (MES 담당 제안) — 실행 완료 (V4)
+- [x] 스테이션 키 값과 설정 이름 → 실행 완료. 스테이션은 `Mes:StationKey`, MES는 `STATION_KEY`(`app.security.station-key`). 두 기본값이 서로 달라서 실행할 때 같은 값으로 맞춰야 한다.
+- [ ] 시연 작업자 사번·PIN → 마이그레이션에는 작업자 시드가 없다(테스트 코드에만 있음). 시연 계정 값은 저장소에서 확인되지 않는다.
+- [x] MES 서버 주소 → 실행 완료. 주소는 `service-config.properties`(`mes.host`, `web.public-host`)와 스테이션의 `Mes:BaseUrl`로 설정한다. 시연에 쓴 PC는 저장소에서 확인되지 않는다.
 
 ### 7. 후속 작업
 
-- **레시피 홀 기준 전환**: 박스가 덮은 홀 → 부품 다리가 꽂힌 홀 (inference MVP-32, 레시피 NE555-A v4 / NE555-B v2).
-  전환 후 `expectedHoles`·`coveredHoles`는 다리 홀만 담는다 (예: 전선·저항 2개, IC 14개). 위 본문 예시는 전환 전 형식이다.
-- **웹 조회 응답 계약**: `GET /api/inspections`, `GET /api/inspections/{id}`의 응답 JSON 모양 (목록 필드, 페이지 처리, 부품별 결과 포함 범위).
-- **스테이션·HMI 전송 연동**: 검사 기록과 확인 기록 API 호출, 연결 실패 시 로컬 보관 후 재전송을 스테이션 담당자가 구현한다.
+- [x] **레시피 홀 기준 전환** — 실행 완료. 박스가 덮은 홀 → 부품 다리가 꽂힌 홀로 바뀌었다 (inference MVP-32). 현재 스테이션 레시피는 NE555-A v4, NE555-B v3. 전환 후 `expectedHoles`·`coveredHoles`는 다리 홀만 담는다 (예: 전선·저항 2개, IC 14개). 위 본문 예시는 전환 전 형식이다.
+- [ ] **웹 조회 응답 계약**: `GET /api/inspections`, `GET /api/inspections/{id}`는 구현됐지만(관리자 웹이 사용), 응답 JSON 모양(목록 필드, 페이지 처리, 부품별 결과 포함 범위)은 이 문서에 정리돼 있지 않다.
+- [~] **스테이션·HMI 전송 연동**: 검사 기록 전송과 연결 실패 시 보관 후 재전송은 실행 완료. 확인 기록(불량 확정) 전송은 미구현.

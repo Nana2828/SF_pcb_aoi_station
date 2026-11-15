@@ -75,6 +75,14 @@ flowchart LR
 | 부품-핀홀 매칭 | `inference/app/board.py`, `main.py` |
 | API 계약 | [docs/api-contract.md](docs/api-contract.md) |
 
+아래는 팀장이 작성한 부분입니다 (제 담당이 아닙니다).
+
+| 구분 | 파일 |
+|---|---|
+| 레시피 초안 API `POST /recipe-draft` | `inference/app/recipe_draft.py`, `main.py`의 해당 라우트 |
+| 부품 단위 묶음 매칭 (`/infer` 결과는 그대로) | `inference/app/board.py`의 `match_holes_to_boxes_grouped` |
+| 위 기능의 단위 테스트 | `inference/tests/` |
+
 </details>
 
 **목차**
@@ -167,7 +175,7 @@ sequenceDiagram
 - mm 좌표 방식(초기 설계)은 쓰지 않는다. mm 컬럼은 V4 마이그레이션에서 이미 정리했다 (현재 마지막 번호는 V8, 번호는 MES 담당이 정함).
 
 **레시피 등록 (사진 기반 초안)**
-- 관리자 웹에서 보드 사진을 올리면 MES가 Python으로 전달해 부품·홀 초안을 받도록 MES 쪽 클라이언트(`RecipeDraftClient`, 기본 경로 `/recipe-draft`)가 구현돼 있다. 이 저장소의 추론 서비스(`inference/`)에는 아직 해당 경로가 없다. React는 Python을 직접 호출하지 않는다.
+- 관리자 웹에서 보드 사진을 올리면 MES가 Python으로 전달해 부품·홀 초안을 받도록 MES 쪽 클라이언트(`RecipeDraftClient`, 기본 경로 `/recipe-draft`)가 구현돼 있고, Python 쪽 `POST /recipe-draft`(`inference/app/recipe_draft.py`)는 팀장이 작성했다. `/infer`와 같은 파이프라인을 돌린 뒤 YOLO 박스 하나를 부품 하나로 묶어 부품별 다리 홀 초안을 만든다. React는 Python을 직접 호출하지 않는다.
 - 받은 초안은 사람이 검토·수정한 뒤 새 버전으로 저장한다 (`status=DRAFT`, `active=false`).
 - `ADMIN`이 승인하면 `status=ACTIVE`로 바뀌고 해당 제품의 기존 활성 버전은 `status=ARCHIVED`가 된다.
 - 자세한 요청·응답 형식은 [API 계약서](docs/api-contract.md)의 "사진 기반 레시피 초안" 참고.

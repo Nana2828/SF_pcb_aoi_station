@@ -1,6 +1,6 @@
 # 추론 서비스 (Python)
 
-- 담당:
+- 담당: 최나연 (`/recipe-draft` 관련 파일은 팀장)
 - 기술: Python, FastAPI, YOLO
 - 포트: 8001
 
@@ -175,7 +175,7 @@ OCR로 읽어서, 그걸 행 위치 계산의 1차 기준점(앵커)으로 직�
 
 | 파일 | 역할 | 상태 |
 |---|---|---|
-| [app/main.py](app/main.py) | FastAPI 앱. `/health`, `/infer`, `/infer/debug`(임시 테스트용) 엔드포인트, YOLO 로딩·추론, 중복 박스 제거(`_deduplicate_boxes`), 전체 파이프라인 조립 | 완성 |
+| [app/main.py](app/main.py) | FastAPI 앱. `/health`, `/infer`, `/infer/debug`(임시 테스트용), `/recipe-draft`(팀장 작성) 엔드포인트, YOLO 로딩·추론, 중복 박스 제거(`_deduplicate_boxes`), 전체 파이프라인 조립 | 완성 |
 | [app/roi.py](app/roi.py) | 방향 판별 + 미세 회전 보정 후, 가로·세로 크롭과 라벨 앵커 조립 | 완성 |
 | [app/rail_detect.py](app/rail_detect.py) | 레일 선 색상 검출로 가로 크롭 범위 + 기울기 측정 | 완성 |
 | [app/label_detect.py](app/label_detect.py) | 행 번호 라벨 OCR로 세로 크롭 범위 + 행 앵커 계산 | 완성 |
@@ -183,14 +183,16 @@ OCR로 읽어서, 그걸 행 위치 계산의 1차 기준점(앵커)으로 직�
 | [app/pinhole_grid.py](app/pinhole_grid.py) | 핀홀 282개의 그리드 정의(행 A~U, 열 0~13)와 라벨 변환 | 완성 |
 | [app/board_detect.py](app/board_detect.py) | 크롭된 이미지에서 핀홀 282개의 실제 픽셀 위치 계산 | 완성 |
 | [app/board.py](app/board.py) | 핀홀을 이미지 속 위치·장착 여부와 함께 구조화, YOLO 박스와 대조 | 완성 |
+| [app/recipe_draft.py](app/recipe_draft.py) | 팀장 작성. 기준 보드 사진 → 레시피 초안(`POST /recipe-draft`)의 부품 번호 매기기·검토 사유 계산 | 완성 |
+| [tests/](tests/) | 팀장 작성. `/recipe-draft` 단위 테스트 (가중치·샘플 파일이 없으면 일부는 건너뜀) | — |
 | [app/dev_plot_infer.py](app/dev_plot_infer.py) | 개발용: 원본 사진 → 크롭 → 핀홀 → YOLO 탐지까지 실제 서비스와 동일하게 돌려서 한 이미지로 시각 확인하는 CLI. `--cropped`로 이미 크롭된 이미지도 바로 확인 가능 | 개발 도구 |
 | `app/models/` | YOLO 가중치 파일을 두는 곳 (Git에는 안 올라감) | — |
 | `requirements.txt` | fastapi, uvicorn, python-multipart, pydantic, numpy, opencv-python, pytesseract, ultralytics | — |
 
 실제 사진 여러 장(부품 없는 빈 보드, 부품 있는 보드, 해상도·카메라 방향이 다른
-사진들 포함)으로 전체 파이프라인이 검증됐다 — 카메라 위치·기울기·조명·해상도가
-달라도 핀홀 위치가 픽셀 단위로 정확히 맞고, IC·LED·커패시터로 홀이 가려져도 정렬이
-유지된다.
+사진들 포함)에 핀홀 위치를 겹쳐 그려 눈으로 확인했다. 부품으로 홀이 가려진 사진에서도
+정렬이 유지되는 것을 확인했지만, 좌표 정확도 같은 정량 평가는 하지 않았다
+(자세한 확인 범위는 [WORKLOG.md](WORKLOG.md) 맨 위 요약 참고).
 
 ## 환경 준비
 

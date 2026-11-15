@@ -208,11 +208,10 @@ pcb-aoi-station/
 │   ├── training/                 학습 스크립트
 │   └── requirements.txt
 ├── mes/
-│   ├── pcb_manage/                Java · 백엔드 담당
-│   │   ├── src/main/java/...      Spring Boot
-│   │   ├── src/main/resources/db/ DB 마이그레이션 SQL (V1~V8)
-│   │   └── build.gradle.kts
-│   └── postman/                   Postman 워크스페이스 전역 변수 설정 (API 컬렉션은 없음)
+│   └── pcb_manage/                Java · 백엔드 담당
+│       ├── src/main/java/...      Spring Boot
+│       ├── src/main/resources/db/ DB 마이그레이션 SQL (V1~V8)
+│       └── build.gradle.kts
 └── web/                          React · 관리자 웹
     └── src/pages/                대시보드·검사·불량·제품·레시피·레시피 초안·스테이션·AI 모델·사용자·감사 로그
 ```

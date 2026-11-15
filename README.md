@@ -150,13 +150,15 @@ sequenceDiagram
     ST-->>HMI: 판정 결과
     ST->>ST: 보관함에 기록 저장
     ST->>MES: POST /api/inspections<br/>(실패 시 보관함에 남기고 재전송)
-    alt FAIL
+    alt 판정이 FAIL일 때
         작업자->>HMI: 번호대로 수리 → Space<br/>(재검사, 같은 보드 #0007-2)
         작업자->>HMI: 또는 F (불량 확정)
-        HMI->>ST: 확인 기록
-        ST->>MES: POST /api/inspections/{id}<br/>/confirmations
+        HMI->>HMI: 화면만 대기로 복귀<br/>(MES 확인 기록 전송은 미구현)
     end
 ```
+
+- 판정 불가·오류일 때도 Space로 재검사한다. FAIL이 기본 3회째 이어지면 불량 확정(F)을 권한다.
+- MES에는 `POST /api/inspections/{id}/confirmations`(확인 기록)가 만들어져 있지만, 최종본 기준 HMI·스테이션은 아직 이 API를 호출하지 않는다.
 
 **판정 방식 (홀 목록)**
 - 보드 좌표는 A~U(보드 번호 10~30, 21행) × 0~13(레일2 + A~E + F~J + 레일2, 14열). 전원 레일에는 E·K·Q 행이 없다.
@@ -165,7 +167,7 @@ sequenceDiagram
 - mm 좌표 방식(초기 설계)은 쓰지 않는다. mm 컬럼은 V4 마이그레이션에서 이미 정리했다 (현재 마지막 번호는 V8, 번호는 MES 담당이 정함).
 
 **레시피 등록 (사진 기반 초안)**
-- 관리자 웹에서 보드 사진을 올리면 MES가 Python `/recipe-draft`로 전달해 부품·홀 초안을 받는다. React는 Python을 직접 호출하지 않는다.
+- 관리자 웹에서 보드 사진을 올리면 MES가 Python으로 전달해 부품·홀 초안을 받도록 MES 쪽 클라이언트(`RecipeDraftClient`, 기본 경로 `/recipe-draft`)가 구현돼 있다. 이 저장소의 추론 서비스(`inference/`)에는 아직 해당 경로가 없다. React는 Python을 직접 호출하지 않는다.
 - 받은 초안은 사람이 검토·수정한 뒤 새 버전으로 저장한다 (`status=DRAFT`, `active=false`).
 - `ADMIN`이 승인하면 `status=ACTIVE`로 바뀌고 해당 제품의 기존 활성 버전은 `status=ARCHIVED`가 된다.
 - 자세한 요청·응답 형식은 [API 계약서](docs/api-contract.md)의 "사진 기반 레시피 초안" 참고.
@@ -178,7 +180,6 @@ pcb-aoi-station/
 ├── service-config.properties     MES·웹·Python 서비스 주소·포트 설정
 ├── docs/                         설계 문서
 │   ├── api-contract.md           API 계약서
-│   ├── defect-criteria.md        불량 기준서 (한도 견본 포함)
 │   └── recipe-ne555.json         레시피 샘플 (NE555-A)
 ├── station/                      C# · 조장
 │   ├── Inspection.slnx
@@ -437,7 +438,7 @@ psql -U postgres -c "CREATE DATABASE pcb_aoi;"
 
 ```powershell
 cd mes\pcb_manage
-$env:DB_PASSWORD = "1234"
+$env:DB_PASSWORD = "<DB 비밀번호>"
 .\gradlew.bat bootRun
 ```
 
